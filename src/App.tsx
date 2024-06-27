@@ -36,7 +36,7 @@ const App = () => {
             let l402Header = null;
 
             try {
-                // replace 'http://localhost:4000/api/query' with 'http://localhost:9090' if stop using proxy
+                // replace 'http://localhost:4000/api/query' with 'http://localhost:9090/query' if stop using proxy
                 // now proxy is set to prevent cors errors
                 await fetch('http://localhost:4000/api/query', {
                     method: 'POST',
@@ -104,7 +104,7 @@ const App = () => {
                         onPaid: async ({ preimage }) => {
                             console.log('preimage', preimage);
                             window.modalToOpen = true;
-                            // replace 'http://localhost:4000/api/query' with 'http://localhost:9090' if stop using proxy
+                            // replace 'http://localhost:4000/api/query' with 'http://localhost:9090/query' if stop using proxy
                             // now proxy is set to prevent cors errors
                             const response = await fetch('http://localhost:4000/api/query', {
                                 method: 'POST',
