@@ -1,3 +1,3 @@
 interface Window {
-    modalOpen: boolean;
+    modalToOpen: boolean;
 }

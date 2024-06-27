@@ -2,6 +2,7 @@ const express = require('express');
 const { graphqlHTTP } = require('express-graphql');
 const { buildSchema } = require('graphql');
 const cors = require('cors');
+const { createProxyMiddleware } = require('http-proxy-middleware');
 
 // Define a schema
 const schema = buildSchema(`
@@ -12,30 +13,38 @@ const schema = buildSchema(`
 
 // Define a root resolver
 const root = {
-    hello: () => {
-        return 'Hello world!';
-    },
-};
-
-// Middleware to check for authorization
-const checkAuth = (req, res, next) => {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || authHeader !== 'Bearer auth-token') {
-        console.log('111')
-        res.status(401).send('Unauthorized');
-        return;
-    }
-    next();
+    hello: () => 'Hello world!',
 };
 
 // Create an express server and a GraphQL endpoint
 const app = express();
 
 // Use CORS middleware
-app.use(cors());
+app.use(cors({
+    exposedHeaders: ['WWW-Authenticate']
+}));
 
-// Use the authorization middleware
-app.use(checkAuth);
+// Proxy setup
+app.use('/api', createProxyMiddleware({
+    target: 'http://localhost:9090',
+    changeOrigin: true,
+    pathRewrite: {
+        '^/api': '', // remove /api prefix when forwarding to the target
+    },
+    onProxyRes: (proxyRes, req, res) => {
+        console.log('Received response:', proxyRes.statusCode);
+        // Forward all headers from the proxy response
+        Object.keys(proxyRes.headers).forEach(key => {
+            res.setHeader(key, proxyRes.headers[key]);
+        });
+        // Expose the WWW-Authenticate header
+        res.setHeader('Access-Control-Expose-Headers', 'WWW-Authenticate');
+    },
+    onError: (err, req, res) => {
+        console.error('Proxy error:', err);
+        res.status(500).json({ error: 'Proxy error' });
+    }
+}));
 
 app.use('/graphql', graphqlHTTP({
     schema: schema,
