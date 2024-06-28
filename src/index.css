@@ -17,3 +17,43 @@ code {
 .root {
   height: 100vh;
 }
+
+.container{
+  padding: 20px;
+}
+
+.flex {
+  display: flex;
+  gap: 10px;
+}
+
+.flex-column{
+  flex-direction: column;
+}
+
+.hoverable{
+  font-weight: 500;
+  cursor: pointer;
+  transition: .3s ease;
+}
+
+.hoverable:hover{
+  color: blue;
+}
+
+ol {
+}
+
+ol li {
+  margin-bottom: 10px;
+}
+
+.active{
+  color: blue;
+}
+
+.example{
+  margin-top: 10px;
+  font-size: 12px;
+  font-style: italic;
+}
