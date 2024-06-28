@@ -19,12 +19,7 @@ const root = {
 // Create an express server and a GraphQL endpoint
 const app = express();
 
-// Use CORS middleware
-app.use(cors({
-    exposedHeaders: ['WWW-Authenticate']
-}));
-
-// Proxy setup
+/*
 app.use('/api', createProxyMiddleware({
     target: 'http://localhost:9090',
     changeOrigin: true,
@@ -45,6 +40,7 @@ app.use('/api', createProxyMiddleware({
         res.status(500).json({ error: 'Proxy error' });
     }
 }));
+ */
 
 app.use('/graphql', graphqlHTTP({
     schema: schema,

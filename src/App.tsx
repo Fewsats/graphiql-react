@@ -36,19 +36,15 @@ const App = () => {
             let l402Header = null;
 
             try {
-                // replace 'http://localhost:4000/api/query' with 'http://localhost:9090/query' if stop using proxy
-                // now proxy is set to prevent cors errors
-                await fetch('http://localhost:4000/api/query', {
+                await fetch('http://localhost:9090/query', {
                     method: 'POST',
                     headers: {
-                        Accept: 'application/json',
                         'Content-Type': 'application/json',
-                        // 'x-hasura-admin-secret': 'myadminsecretkey'
                     },
-                    body: JSON.stringify(graphQLParams),
-                    credentials: 'same-origin',
+                    body: JSON.stringify(graphQLParams)
                 })
                     .then(response => {
+                        console.log('response 111', response);
                         if (!response.ok) {
                             // throw new Error(`HTTP error! status: ${response.status}`);
                             console.log(`err?.response?.status`, response?.status);
@@ -75,7 +71,7 @@ const App = () => {
                         }
                     })
                     .catch((err) => {
-                        // without proxy added the extraction of WWW-Authenticate can probably become available here
+                        console.log(`err`, err);
                     })
 
                 console.log('l402Header', l402Header);
@@ -104,17 +100,13 @@ const App = () => {
                         onPaid: async ({ preimage }) => {
                             console.log('preimage', preimage);
                             window.modalToOpen = true;
-                            // replace 'http://localhost:4000/api/query' with 'http://localhost:9090/query' if stop using proxy
-                            // now proxy is set to prevent cors errors
-                            const response = await fetch('http://localhost:4000/api/query', {
+                            const response = await fetch('http://localhost:9090/query', {
                                 method: 'POST',
                                 headers: {
-                                    Accept: 'application/json',
                                     'Content-Type': 'application/json',
                                     Authorization: `L402 ${macaroon}:${preimage}`
                                 },
                                 body: JSON.stringify(graphQLParams),
-                                credentials: 'same-origin',
                             })
 
                             if (!response.ok) {
