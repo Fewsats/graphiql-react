@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { GraphiQL } from 'graphiql';
 import type { Fetcher } from '@graphiql/toolkit';
 import 'graphiql/graphiql.min.css';
@@ -6,38 +6,18 @@ import { init } from '@getalby/bitcoin-connect-react';
 import { Invoice } from '@getalby/lightning-tools';
 import parseWWWAuthenticateHeader from "../utils/parseWWWAuthenticateHeader";
 
-interface URL {
-    url: string;
-    invoice?: string;
-    macaroon?: string;
-    preimage?: string;
-}
+const INPUT_WIDTH = '500px';
+const LABEL_WIDTH = '150px';
 
 const GraphQLExplorer: React.FC = () => {
-    const [urls, setUrls] = useState<URL[]>([]);
-    const [activeUrl, setActiveUrl] = useState<URL | null>(null);
-    const [paymentHash, setPaymentHash] = useState('N/A');
-    const [executeQuery, setExecuteQuery] = useState(false);
-    const [input, setInput] = useState('');
+    const [url, setUrl] = useState('');
     const [credentials, setCredentials] = useState('');
     const [isValidCredentials, setIsValidCredentials] = useState(false);
-
-    useEffect(() => {
-        const urls = localStorage.getItem('hub-urls');
-        const urlsParsed = urls ? JSON.parse(urls) : [];
-        setUrls(urlsParsed);
-
-        const timer = setTimeout(() => {
-            setExecuteQuery(true);
-        }, 1000);
-
-        return () => clearTimeout(timer);
-    }, []);
+    const [status, setStatus] = useState<{ message: string; ok: boolean } | null>(null);
 
     useEffect(() => {
         if (typeof window !== 'undefined') {
             init({ appName: 'graphiql-react' });
-            window.modalToOpen = true;
         }
     }, []);
 
@@ -46,55 +26,46 @@ const GraphQLExplorer: React.FC = () => {
         setIsValidCredentials(isValid);
     }, [credentials]);
 
-    const handleCredentialsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        setCredentials(e.target.value);
+    const handleUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setUrl(e.target.value);
+        setStatus(null);
     };
 
-    const fetcher: Fetcher = async (graphQLParams) => {
-        console.log('Fetcher called with params:', graphQLParams);
-        
-        if (!executeQuery || !window.modalToOpen || !activeUrl) {
-            console.log('Preventing initial query execution. Conditions:', {
-                executeQuery,
-                modalToOpen: window.modalToOpen,
-                activeUrlExists: !!activeUrl
-            });
+    const handleCredentialsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setCredentials(e.target.value);
+        setStatus(null);
+    };
+
+    const fetcher: Fetcher = useCallback(async (graphQLParams) => {
+        if (!url) {
+            console.log('No URL provided');
             return Promise.resolve({ data: null });
         }
 
         try {
-            console.log('Preparing to fetch from URL:', activeUrl.url);
+            console.log('Fetching from URL:', url);
             let response;
             
+            const headers: HeadersInit = {
+                'Content-Type': 'application/json',
+            };
+
             if (isValidCredentials) {
                 const [macaroon, preimage] = credentials.split(':');
-                console.log('Using authenticated request with L402');
-                response = await fetch(activeUrl.url, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        Authorization: `L402 ${macaroon}:${preimage}`
-                    },
-                    body: JSON.stringify(graphQLParams),
-                });
-            } else {
-                console.log('Using unauthenticated request');
-                response = await fetch(activeUrl.url, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(graphQLParams),
-                });
+                headers['Authorization'] = `L402 ${macaroon}:${preimage}`;
             }
+
+            response = await fetch(url, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify(graphQLParams),
+            });
 
             console.log('Fetch response status:', response.status);
-            if (!response.ok) {
-                console.error('HTTP error occurred:', response.status, response.statusText);
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-
-            if (response.status === 402) {
+            if (response.ok) {
+                setStatus({ message: `${response.status} ${response.statusText || 'OK'}`, ok: true });
+            } else if (response.status === 402) {
+                setStatus({ message: '402 Payment Required', ok: false });
                 const wwwAuthenticateHeader = response.headers.get('WWW-Authenticate');
                 if (wwwAuthenticateHeader) {
                     const { macaroon, invoice } = parseWWWAuthenticateHeader(wwwAuthenticateHeader);
@@ -106,6 +77,9 @@ const GraphQLExplorer: React.FC = () => {
                     console.log('L402 authentication required:', { macaroon, invoice, paymentHash });
                 }
                 throw new Error('Payment required');
+            } else {
+                setStatus({ message: `${response.status} ${response.statusText || 'Error'}`, ok: false });
+                throw new Error(`HTTP error! status: ${response.status}`);
             }
 
             const result = await response.json();
@@ -120,74 +94,55 @@ const GraphQLExplorer: React.FC = () => {
             console.error('Fetcher error:', error);
             throw error;
         }
-    };
-
-    const handleSubmit = (event: React.FormEvent) => {
-        event.preventDefault();
-        const urlsUpdated = [...urls, { url: input }];
-        setUrls(urlsUpdated);
-        localStorage.setItem('hub-urls', JSON.stringify(urlsUpdated));
-    };
-
-    const handleInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-        setInput(event.target.value);
-    };
-
-    const handleSetActiveUrl = (item: URL) => () => {
-        setActiveUrl(item);
-    };
+    }, [url, credentials, isValidCredentials]);
 
     return (
-        <div className={'root'}>
-            <div className={'flex flex-column container'}>
-                <div>
-                    Example of not authorized and authorized URLs to add to localstorage as <b><i>hub-urls</i></b> key:
-                    <div className={'example'}>
-                        {`[{"url":" http://localhost:9090/query"},{"url":"http://localhost:9090/query", "preimage": "2f84e22556af9919f695d7761f404e98ff98058b7d32074de8c0c83bf63eecd7", "invoice": "lnbcrt1u1p3d23dkpp58r92m0s0vyfdnd3caxhzgvu006dajv9r8pcspknhvezw26t9e8qsdq5g9kxy7fqd9h8vmmfvdjscqzpgxqyz5vqsp59efe44rg6cjl3xwh9glgx4ztcgwtg5l8uhry2v9v7s0zn2wpaz2s9qyyssq2z799an4pt4wtfy8yrk5ee0qqj7w5a74prz5tm8rulwez08ttlaz9xx7eqw7fe94y7t0600d03k55fyguyj24nd9tjmx6sf7dsxkk4gpkyenl8", "macaroon": "AgFQaHR0cHM6Ly9hcGkuZmV3c2F0cy5jb20vdjAvc3RvcmFnZS9kb3dubG9hZC9iMGRmYTY2Ny1iYWZlLTQ2NDgtYTM3MS1iOTRjOGE4N2RhNjUCQgAAOMqtvg9hEtm2OOmuJDOPfpvZMKM4cQDad2ZE5WllycFZ8z4N-KDJY2j-PCnnmIE9XCS-7nBdmjEOVrPiUNNgnwAABiD6XRVzntfAoqZOpmuCKO8zV2BxTwQoiDk3mnmOl8jSvA"}]`}
-                    </div>
-                </div>
-                <div>
-                    Click on added URL and run the query ↓
-                </div>
-                <div>
-                    List of available URLs:
-                </div>
-                <ol>
-                    {urls.map((item, i) => (
-                        <li key={i} className={`hoverable ${item.url === activeUrl?.url && item.macaroon === activeUrl?.macaroon ? 'active' : ''}`} onClick={handleSetActiveUrl(item)}>
-                            <div>URL: {item.url}</div>
-                            {item.preimage && <div>Preimage: {item.preimage}</div>}
-                            {item.macaroon && <div>Macaroon: {item.macaroon}</div>}
-                            {item.invoice && <div>Invoice: {item.invoice}</div>}
-                        </li>
-                    ))}
-                </ol>
-                <form onSubmit={handleSubmit} className={'flex flex-column'}>
-                    <div>
-                        Add new URL:
-                    </div>
-                    <div className={'flex'}>
+        <div className="root">
+            <div className="flex flex-column container p-4 bg-gray-100 rounded-lg shadow mb-4">
+                <div className="flex items-center mb-4">
+                    <label htmlFor="url-input" className="font-semibold text-right pr-4" style={{ width: LABEL_WIDTH }}>GraphQL URL:</label>
+                    <div className="flex-grow">
                         <input
-                            type={'text'}
-                            name={'url'}
-                            onChange={handleInputChange}
-                            value={input}
+                            id="url-input"
+                            type="text"
+                            value={url}
+                            onChange={handleUrlChange}
+                            placeholder="https://api.example.com/graphql"
+                            className="border rounded px-2 py-1"
+                            style={{ width: INPUT_WIDTH }}
                         />
-                        <button type={'submit'}>Submit</button>
+                        {status && (
+                            <span style={{
+                                marginLeft: '1rem',
+                                fontWeight: 'bold',
+                                color: status.ok ? '#16a34a' : '#dc2626'
+                            }}>
+                                {status.message}
+                            </span>
+                        )}
                     </div>
-                </form>
-                <div className={'flex flex-column'}>
-                    <div>Enter L402 Credentials (macaroon:preimage):</div>
-                    <input
-                        type={'text'}
-                        value={credentials}
-                        onChange={handleCredentialsChange}
-                        placeholder="Enter credentials"
-                        className={`border ${isValidCredentials ? 'border-green-500' : 'border-red-500'} rounded px-2 py-1`}
-                    />
-                    {!isValidCredentials && credentials !== '' && (
-                        <div className="text-red-500 text-sm">Invalid format. Should be 'macaroon:preimage'.</div>
-                    )}
+                </div>
+                <div className="flex items-center">
+                    <label htmlFor="credentials-input" className="font-semibold text-right pr-4" style={{ width: LABEL_WIDTH }}>L402 Credentials:</label>
+                    <div>
+                        <input
+                            id="credentials-input"
+                            type="text"
+                            value={credentials}
+                            onChange={handleCredentialsChange}
+                            placeholder="macaroon:preimage"
+                            className="border rounded px-2 py-1"
+                            style={{ 
+                                width: INPUT_WIDTH,
+                                borderColor: isValidCredentials ? '#22c55e' : (credentials ? '#ef4444' : '#e5e7eb')
+                            }}
+                        />
+                        {!isValidCredentials && credentials !== '' && (
+                            <div style={{ color: '#ef4444', fontSize: '0.75rem', marginTop: '0.25rem' }}>
+                                Invalid format. Should be 'macaroon:preimage'.
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
             <GraphiQL fetcher={fetcher} />
