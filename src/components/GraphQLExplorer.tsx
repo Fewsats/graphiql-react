@@ -6,9 +6,6 @@ import { init } from '@getalby/bitcoin-connect-react';
 import { Invoice } from '@getalby/lightning-tools';
 import parseWWWAuthenticateHeader from "../utils/parseWWWAuthenticateHeader";
 
-const INPUT_WIDTH = '500px';
-const LABEL_WIDTH = '150px';
-
 const GraphQLExplorer: React.FC = () => {
     const [url, setUrl] = useState('');
     const [credentials, setCredentials] = useState('');
@@ -63,7 +60,7 @@ const GraphQLExplorer: React.FC = () => {
 
             console.log('Fetch response status:', response.status);
             if (response.ok) {
-                setStatus({ message: `${response.status} ${response.statusText}`, ok: true });
+                setStatus({ message: `${response.status} OK`, ok: true });
             } else if (response.status === 402) {
                 setStatus({ message: '402 Payment Required', ok: false });
                 const wwwAuthenticateHeader = response.headers.get('WWW-Authenticate');
@@ -97,53 +94,55 @@ const GraphQLExplorer: React.FC = () => {
     }, [url, credentials, isValidCredentials]);
 
     return (
-        <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-            <div className="flex flex-column container p-4 bg-gray-100 rounded-lg shadow mb-4">
-                <div className="flex items-center mb-4">
-                    <label htmlFor="url-input" className="font-semibold text-right pr-4" style={{ width: LABEL_WIDTH }}>GraphQL URL:</label>
-                    <div className="flex-grow">
-                        <input
-                            id="url-input"
-                            type="text"
-                            value={url}
-                            onChange={handleUrlChange}
-                            placeholder="https://api.example.com/graphql"
-                            className="border rounded px-2 py-1"
-                            style={{ width: INPUT_WIDTH }}
-                        />
-                        {status && (
-                            <span style={{
-                                marginLeft: '1rem',
-                                fontWeight: 'bold',
-                                color: status.ok ? '#16a34a' : '#dc2626'
-                            }}>
-                                {status.message}
-                            </span>
-                        )}
-                    </div>
-                </div>
-                <div className="flex items-center">
-                    <label htmlFor="credentials-input" className="font-semibold text-right pr-4" style={{ width: LABEL_WIDTH }}>L402 Credentials:</label>
-                    <div>
-                        <input
-                            id="credentials-input"
-                            type="text"
-                            value={credentials}
-                            onChange={handleCredentialsChange}
-                            placeholder="macaroon:preimage"
-                            className="border rounded px-2 py-1"
-                            style={{ 
-                                width: INPUT_WIDTH,
-                                borderColor: isValidCredentials ? '#22c55e' : (credentials ? '#ef4444' : '#e5e7eb')
-                            }}
-                        />
-                        {!isValidCredentials && credentials !== '' && (
-                            <div style={{ color: '#ef4444', fontSize: '0.75rem', marginTop: '0.25rem' }}>
-                                Invalid format. Should be 'macaroon:preimage'.
-                            </div>
-                        )}
-                    </div>
-                </div>
+        <div className="graphiql-container" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+            <div className="graphiql-session-header" style={{ 
+                padding: '8px 16px', 
+                borderBottom: '1px solid #e0e0e0', 
+                display: 'block'
+            }}>
+                <label htmlFor="url-input" style={{ marginRight: '8px' }}>URL:</label>
+                <input
+                    id="url-input"
+                    type="text"
+                    value={url}
+                    onChange={handleUrlChange}
+                    placeholder="https://api.example.com/graphql"
+                    style={{ width: '400px', height: '32px', marginRight: '16px' }}
+                />
+                {status && (
+                    <span style={{
+                        fontSize: '14px',
+                        fontWeight: 'bold',
+                        color: status.ok ? 'green' : 'red',
+                        marginRight: '16px'
+                    }}>
+                        {status.message}
+                    </span>
+                )}
+                <label htmlFor="credentials-input" style={{ marginRight: '8px' }}>L402 Credentials:</label>
+                <input
+                    id="credentials-input"
+                    type="text"
+                    value={credentials}
+                    onChange={handleCredentialsChange}
+                    placeholder="macaroon:preimage"
+                    style={{ width: '400px', height: '32px', marginRight: '16px' }}
+                />
+                <button
+                    onClick={() => window.open(`http://app.paywithhub.com/purchases?l402_url=${encodeURIComponent(url)}`, '_blank')}
+                    style={{
+                        backgroundColor: '#8A2BE2',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '4px',
+                        padding: '0 16px',
+                        fontSize: '14px',
+                        cursor: 'pointer',
+                        height: '32px',
+                    }}
+                >
+                    Pay with Hub
+                </button>
             </div>
             <div style={{ flex: 1, overflow: 'auto' }}>
                 <GraphiQL fetcher={fetcher} />
