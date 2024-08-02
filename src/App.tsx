@@ -16,6 +16,8 @@ const App = () => {
     const [paymentHash, setPaymentHash] = useState('N/A');
     const [executeQuery, setExecuteQuery] = useState(false);
     const [input, setInput] = useState('');
+    const [credentials, setCredentials] = useState('');
+    const [isValidCredentials, setIsValidCredentials] = useState(false);
 
     useEffect(() => {
         const urls = localStorage.getItem('hub-urls');
@@ -37,154 +39,88 @@ const App = () => {
         }
     }, []);
 
+    useEffect(() => {
+        // Basic format check: should be "string:string"
+        const isValid = /^[^:]+:[^:]+$/.test(credentials.trim());
+        setIsValidCredentials(isValid);
+    }, [credentials]);
+
+    const handleCredentialsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        setCredentials(e.target.value);
+    };
+
     const fetcher: Fetcher = async (graphQLParams) => {
+        console.log('Fetcher called with params:', graphQLParams);
+        
         if (!executeQuery || !window.modalToOpen || !activeUrl) {
-            // Prevent the initial query execution
+            console.log('Preventing initial query execution. Conditions:', {
+                executeQuery,
+                modalToOpen: window.modalToOpen,
+                activeUrlExists: !!activeUrl
+            });
             return Promise.resolve({ data: null });
         }
 
-        if (activeUrl && activeUrl.macaroon && activeUrl.preimage) {
-            const response = await fetch(activeUrl.url, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    Authorization: `L402 ${activeUrl.macaroon}:${activeUrl.preimage}`
-                },
-                body: JSON.stringify(graphQLParams),
-            })
-
-            if (!response.ok) {
-                throw new Error(
-                    `Request failed with status ${response.status}`
-                );
-            }
-
-            return response.json().catch(() => response.text());
-        }
-
-        if (window.modalToOpen) {
-            let l402Header = null;
-
-            try {
-                await fetch(activeUrl.url, {
+        try {
+            console.log('Preparing to fetch from URL:', activeUrl.url);
+            let response;
+            
+            if (isValidCredentials) {
+                const [macaroon, preimage] = credentials.split(':');
+                console.log('Using authenticated request with L402');
+                response = await fetch(activeUrl.url, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        Authorization: `L402 ${macaroon}:${preimage}`
+                    },
+                    body: JSON.stringify(graphQLParams),
+                });
+            } else {
+                console.log('Using unauthenticated request');
+                response = await fetch(activeUrl.url, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify(graphQLParams)
-                })
-                    .then(response => {
-                        console.log('response 111', response);
-                        if (!response.ok) {
-                            // throw new Error(`HTTP error! status: ${response.status}`);
-                            console.log(`err?.response?.status`, response?.status);
-                            console.log(
-                                ` err.response.headers.get('WWW-Authenticate')`,
-                                response.headers.get('WWW-Authenticate')
-                            );
-
-                            if (response.headers) {
-                                console.log('err.response.headers', response.headers);
-                                Object.keys(response.headers).forEach((key) => {
-                                    console.log(key, response.headers.get(key));
-                                });
-                            }
-
-                            if (
-                                response?.status === 402 &&
-                                response?.headers &&
-                                response?.headers.get('WWW-Authenticate')
-                            ) {
-                                console.log('err.response.headers', response);
-                                l402Header = response.headers.get('WWW-Authenticate');
-                            }
-                        }
-                    })
-                    .catch((err) => {
-                        console.log(`err`, err);
-                    })
-
-                console.log('l402Header', l402Header);
-                if (!l402Header) {
-                    // toast.error('Payment unsuccessful, no 402 header found')
-                    return;
-                }
-
-                const {macaroon, invoice}: { macaroon?: string; invoice?: string } =
-                    parseWWWAuthenticateHeader(l402Header);
-                console.log('macaroon:', macaroon);
-                console.log('invoice:', invoice);
-
-                const urlsUpdated = [
-                    ...urls.filter((item) => item.url === activeUrl.url),
-                    {
-                        ...activeUrl,
-                        macaroon,
-                        invoice
-                    }
-                ];
-                setUrls(urlsUpdated)
-                localStorage.setItem('hub-urls', JSON.stringify(urlsUpdated))
-
-                let localPaymentHash = '';
-                if (invoice) {
-                    const invoiceObj = new Invoice({pr: invoice});
-                    localPaymentHash = invoiceObj?.paymentHash || '';
-                    setPaymentHash(localPaymentHash);
-                }
-
-                if (macaroon && invoice) {
-                    window.modalToOpen = false;
-                    launchPaymentModal({
-                        invoice,
-                        paymentMethods: 'internal',
-                        onPaid: async ({ preimage }) => {
-                            console.log('preimage', preimage);
-
-                            const urlsUpdated = [
-                                ...urls.filter((item) => item.url === activeUrl.url),
-                                {
-                                    ...activeUrl,
-                                    macaroon,
-                                    invoice,
-                                    preimage
-                                }
-                            ];
-                            setUrls(urlsUpdated)
-                            localStorage.setItem('hub-urls', JSON.stringify(urlsUpdated))
-
-                            window.modalToOpen = true;
-                            const response = await fetch(activeUrl.url, {
-                                method: 'POST',
-                                headers: {
-                                    'Content-Type': 'application/json',
-                                    Authorization: `L402 ${macaroon}:${preimage}`
-                                },
-                                body: JSON.stringify(graphQLParams),
-                            })
-
-                            if (!response.ok) {
-                                throw new Error(
-                                    `Request failed with status ${response.status}`
-                                );
-                            }
-
-                            return response.json().catch(() => response.text());
-                        },
-                        onCancelled: async () => {
-                            window.modalToOpen = true;
-                        },
-                    });
-                }
-            } catch (e) {
-                return Promise.resolve({ data: null });
-            } finally {
+                    body: JSON.stringify(graphQLParams),
+                });
             }
 
-            return Promise.resolve({ data: null });
-        }
+            console.log('Fetch response status:', response.status);
+            if (!response.ok) {
+                console.error('HTTP error occurred:', response.status, response.statusText);
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
 
-        return Promise.resolve({ data: null });
+            if (response.status === 402) {
+                const wwwAuthenticateHeader = response.headers.get('WWW-Authenticate');
+                if (wwwAuthenticateHeader) {
+                    const { macaroon, invoice } = parseWWWAuthenticateHeader(wwwAuthenticateHeader);
+                    let paymentHash = '';
+                    if (invoice) {
+                        const invoiceObj = new Invoice({ pr: invoice });
+                        paymentHash = invoiceObj?.paymentHash;
+                    }
+                    console.log('L402 authentication required:', { macaroon, invoice, paymentHash });
+                    // Here you can handle the L402 challenge, e.g., by showing a payment modal
+                    // For now, we'll just log the information
+                }
+                throw new Error('Payment required');
+            }
+
+            const result = await response.json();
+            console.log('Fetcher received result:', result);
+            
+            if (result.errors) {
+                console.error('GraphQL errors in response:', result.errors);
+            }
+
+            return result;
+        } catch (error) {
+            console.error('Fetcher error:', error);
+            throw error;
+        }
     };
 
     console.log('paymentHash', paymentHash);
@@ -252,6 +188,19 @@ const App = () => {
                     <button type={'submit'}>Submit</button>
                 </div>
             </form>
+            <div className={'flex flex-column'}>
+                <div>Enter L402 Credentials (macaroon:preimage):</div>
+                <input
+                    type={'text'}
+                    value={credentials}
+                    onChange={handleCredentialsChange}
+                    placeholder="Enter credentials"
+                    className={`border ${isValidCredentials ? 'border-green-500' : 'border-red-500'} rounded px-2 py-1`}
+                />
+                {!isValidCredentials && credentials !== '' && (
+                    <div className="text-red-500 text-sm">Invalid format. Should be 'macaroon:preimage'.</div>
+                )}
+            </div>
         </div>
         <GraphiQL fetcher={fetcher} />
     </div>;
