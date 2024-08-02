@@ -63,7 +63,7 @@ const GraphQLExplorer: React.FC = () => {
 
             console.log('Fetch response status:', response.status);
             if (response.ok) {
-                setStatus({ message: `${response.status} ${response.statusText || 'OK'}`, ok: true });
+                setStatus({ message: `${response.status} ${response.statusText}`, ok: true });
             } else if (response.status === 402) {
                 setStatus({ message: '402 Payment Required', ok: false });
                 const wwwAuthenticateHeader = response.headers.get('WWW-Authenticate');
@@ -78,7 +78,7 @@ const GraphQLExplorer: React.FC = () => {
                 }
                 throw new Error('Payment required');
             } else {
-                setStatus({ message: `${response.status} ${response.statusText || 'Error'}`, ok: false });
+                setStatus({ message: `${response.status} ${response.statusText}`, ok: false });
                 throw new Error(`HTTP error! status: ${response.status}`);
             }
 
@@ -97,7 +97,7 @@ const GraphQLExplorer: React.FC = () => {
     }, [url, credentials, isValidCredentials]);
 
     return (
-        <div className="root">
+        <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
             <div className="flex flex-column container p-4 bg-gray-100 rounded-lg shadow mb-4">
                 <div className="flex items-center mb-4">
                     <label htmlFor="url-input" className="font-semibold text-right pr-4" style={{ width: LABEL_WIDTH }}>GraphQL URL:</label>
@@ -145,7 +145,9 @@ const GraphQLExplorer: React.FC = () => {
                     </div>
                 </div>
             </div>
-            <GraphiQL fetcher={fetcher} />
+            <div style={{ flex: 1, overflow: 'auto' }}>
+                <GraphiQL fetcher={fetcher} />
+            </div>
         </div>
     );
 };
