@@ -5,12 +5,27 @@ import 'graphiql/graphiql.min.css';
 import { init } from '@getalby/bitcoin-connect-react';
 import { Invoice } from '@getalby/lightning-tools';
 import parseWWWAuthenticateHeader from "../utils/parseWWWAuthenticateHeader";
+import OpenAI from 'openai';
+import { zodResponseFormat } from 'openai/helpers/zod';
+import { z } from 'zod';
+
+const GraphQLQuery = z.object({
+    title: z.string(),
+    query: z.string(),
+});
+
+const GraphQLQueries = z.object({
+    queries: z.array(GraphQLQuery),
+});
 
 const GraphQLExplorer: React.FC = () => {
-    const [url, setUrl] = useState('');
+    const [url, setUrl] = useState('https://countries.trevorblades.com/');
     const [credentials, setCredentials] = useState('');
     const [isValidCredentials, setIsValidCredentials] = useState(false);
     const [status, setStatus] = useState<{ message: string; ok: boolean } | null>(null);
+    const [schema, setSchema] = useState<any>(null);
+    const [generatedQueries, setGeneratedQueries] = useState<Array<{ title: string; query: string }>>([]);
+    const [selectedQueryIndex, setSelectedQueryIndex] = useState<number | null>(null);
 
     useEffect(() => {
         if (typeof window !== 'undefined') {
@@ -32,6 +47,44 @@ const GraphQLExplorer: React.FC = () => {
         setCredentials(e.target.value);
         setStatus(null);
     };
+
+    const generateQueriesWithChatGPT = useCallback(async (schema: any) => {
+        console.log("api key", process.env.OPENAI_API_KEY)
+        const client = new OpenAI({apiKey: 'sk-XXXXX', dangerouslyAllowBrowser: true });
+
+        const prompt = `Given the following GraphQL schema, generate 3 example queries:
+
+        ${JSON.stringify(schema, null, 2)}
+
+        Please provide diverse and interesting queries that showcase different aspects of the schema.`;
+
+        try {
+            const completion = await client.beta.chat.completions.parse({
+                model: "gpt-4o-2024-08-06",
+                messages: [
+                    {
+                        role: "system",
+                        content: "You are a helpful GraphQL query generator. Only use the schema for GraphQL query responses.",
+                    },
+                    { role: "user", content: prompt },
+                ],
+                response_format: zodResponseFormat(GraphQLQueries, 'graphQLQueries'),
+            });
+
+            const message = completion.choices[0]?.message;
+            if (message?.parsed) {
+                console.log("Generated queries:", message.parsed.queries);
+                setGeneratedQueries(message.parsed.queries);
+                setSelectedQueryIndex(0); // Select the first query by default
+            } else if (message?.refusal) {
+                console.log("Query generation refused:", message.refusal);
+            } else {
+                console.log("Unexpected response format");
+            }
+        } catch (error) {
+            console.error("Error generating queries:", error);
+        }
+    }, []);
 
     const fetcher: Fetcher = useCallback(async (graphQLParams) => {
         if (!url) {
@@ -82,6 +135,11 @@ const GraphQLExplorer: React.FC = () => {
             const result = await response.json();
             console.log('Fetcher received result:', result);
             
+            if (result.data && result.data.__schema) {
+                setSchema(result.data.__schema);
+                generateQueriesWithChatGPT(result.data.__schema);
+            }
+
             if (result.errors) {
                 console.error('GraphQL errors in response:', result.errors);
             }
@@ -91,7 +149,11 @@ const GraphQLExplorer: React.FC = () => {
             console.error('Fetcher error:', error);
             throw error;
         }
-    }, [url, credentials, isValidCredentials]);
+    }, [url, credentials, isValidCredentials, generateQueriesWithChatGPT]);
+
+    const handleQuerySelect = (index: number) => {
+        setSelectedQueryIndex(index);
+    };
 
     return (
         <div className="graphiql-container" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -144,8 +206,31 @@ const GraphQLExplorer: React.FC = () => {
                     Pay with Hub
                 </button>
             </div>
+            <div style={{ padding: '8px 16px', borderBottom: '1px solid #e0e0e0' }}>
+                <h3>Example Queries:</h3>
+                {generatedQueries.map((query, index) => (
+                    <button
+                        key={index}
+                        onClick={() => handleQuerySelect(index)}
+                        style={{
+                            margin: '0 8px 8px 0',
+                            padding: '4px 8px',
+                            backgroundColor: selectedQueryIndex === index ? '#4CAF50' : '#f0f0f0',
+                            color: selectedQueryIndex === index ? 'white' : 'black',
+                            border: 'none',
+                            borderRadius: '4px',
+                            cursor: 'pointer',
+                        }}
+                    >
+                        {query.title}
+                    </button>
+                ))}
+            </div>
             <div style={{ flex: 1, overflow: 'auto' }}>
-                <GraphiQL fetcher={fetcher} />
+                <GraphiQL
+                    fetcher={fetcher}
+                    query={selectedQueryIndex !== null ? generatedQueries[selectedQueryIndex]?.query : undefined}
+                />
             </div>
         </div>
     );
