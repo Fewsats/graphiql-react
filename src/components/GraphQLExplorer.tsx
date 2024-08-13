@@ -1,13 +1,12 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { GraphiQL } from 'graphiql';
 import type { Fetcher } from '@graphiql/toolkit';
 import 'graphiql/graphiql.min.css';
 import { init } from '@getalby/bitcoin-connect-react';
 import { Invoice } from '@getalby/lightning-tools';
 import parseWWWAuthenticateHeader from "../utils/parseWWWAuthenticateHeader";
-import OpenAI from 'openai';
-import { zodResponseFormat } from 'openai/helpers/zod';
 import { z } from 'zod';
+import { debounce } from 'lodash';
 
 const GraphQLQuery = z.object({
     title: z.string(),
@@ -18,25 +17,31 @@ const GraphQLQueries = z.object({
     queries: z.array(GraphQLQuery),
 });
 
+type Query = {
+    title: string;
+    query: string;
+};
+
 const GraphQLExplorer: React.FC = () => {
-    const [url, setUrl] = useState('https://countries.trevorblades.com/');
-    const [credentials, setCredentials] = useState('');
-    const [isValidCredentials, setIsValidCredentials] = useState(false);
+    const [url, setUrl] = useState('https://flask-l-402-data-pol-avec.replit.app/graphql');
+    const [credentials, setCredentials] = useState('AgE0aHR0cHM6Ly82NjYzMWQ0Ny1kNjk5LTQyYjUtOGM4ZS03YTI4N2I4Zjg0OWQucmVwbC5jbwJCAADCisWw7zgzOWrhqHoIgkeakQXziNXlnEEjRos5xEadodH0nUNEJ30DYUdlWJS6qa7o5q3_SrR5UcdxG9OOSXqgAAAGIGqpQR5H6DFbIYuMmqk1vwboLbBUgs7A1Ef3v2cJuPnp:532d81688f2a4d236a992e72b4cd53daf71fd6973a4dc7c4af0a6126a5de951e');
     const [status, setStatus] = useState<{ message: string; ok: boolean } | null>(null);
     const [schema, setSchema] = useState<any>(null);
-    const [generatedQueries, setGeneratedQueries] = useState<Array<{ title: string; query: string }>>([]);
-    const [selectedQueryIndex, setSelectedQueryIndex] = useState<number | null>(null);
+    const [generatedQueries, setGeneratedQueries] = useState<Query[]>([]);
+    const [selectedQuery, setSelectedQuery] = useState<string>('');
+    const [customQuery, setCustomQuery] = useState<string>("Can you generate 2 sample queries?");
 
     useEffect(() => {
         if (typeof window !== 'undefined') {
             init({ appName: 'graphiql-react' });
         }
     }, []);
+    
+    
+    const isValid = (creds: string): boolean => {
+        return /^[^:]+:[^:]+$/.test(creds.trim());
+    };
 
-    useEffect(() => {
-        const isValid = /^[^:]+:[^:]+$/.test(credentials.trim());
-        setIsValidCredentials(isValid);
-    }, [credentials]);
 
     const handleUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         setUrl(e.target.value);
@@ -48,112 +53,121 @@ const GraphQLExplorer: React.FC = () => {
         setStatus(null);
     };
 
-    const generateQueriesWithChatGPT = useCallback(async (schema: any) => {
-        console.log("api key", process.env.OPENAI_API_KEY)
-        const client = new OpenAI({apiKey: 'sk-XXXXX', dangerouslyAllowBrowser: true });
 
-        const prompt = `Given the following GraphQL schema, generate 3 example queries:
-
-        ${JSON.stringify(schema, null, 2)}
-
-        Please provide diverse and interesting queries that showcase different aspects of the schema.`;
-
+    const generateQueriesWithAPI = useCallback(async (schema: any) => {
         try {
-            const completion = await client.beta.chat.completions.parse({
-                model: "gpt-4o-2024-08-06",
-                messages: [
-                    {
-                        role: "system",
-                        content: "You are a helpful GraphQL query generator. Only use the schema for GraphQL query responses.",
-                    },
-                    { role: "user", content: prompt },
-                ],
-                response_format: zodResponseFormat(GraphQLQueries, 'graphQLQueries'),
+            const requestBody = { 
+                schema: schema,
+                question: customQuery
+            };
+
+            const response = await fetch('http://localhost:8000/generate_queries', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(requestBody),
             });
 
-            const message = completion.choices[0]?.message;
-            if (message?.parsed) {
-                console.log("Generated queries:", message.parsed.queries);
-                setGeneratedQueries(message.parsed.queries);
-                setSelectedQueryIndex(0); // Select the first query by default
-            } else if (message?.refusal) {
-                console.log("Query generation refused:", message.refusal);
-            } else {
-                console.log("Unexpected response format");
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(`HTTP error! status: ${response.status}, message: ${JSON.stringify(errorData)}`);
+            }
+
+            const data = await response.json();
+            console.log("Generated queries:", data.response);
+            const queries = data.response.queries;
+            setGeneratedQueries(queries);
+            
+            // Set the first query as the selected query
+            if (queries.length > 0) {
+                setSelectedQuery(queries[0].query);
             }
         } catch (error) {
             console.error("Error generating queries:", error);
         }
-    }, []);
+    }, [customQuery]);
 
-    const fetcher: Fetcher = useCallback(async (graphQLParams) => {
+    const debouncedGenerateQueries = useMemo(
+        () => debounce(generateQueriesWithAPI, 500),
+        [generateQueriesWithAPI]
+    );
+
+    const handleQuerySelection = (query: string) => {
+        setSelectedQuery(query);
+    };
+
+    const fetcher = useCallback(async (graphQLParams: any) => {
         if (!url) {
             console.log('No URL provided');
-            return Promise.resolve({ data: null });
+            return { errors: [{ message: 'No URL provided' }] };
         }
 
         try {
             console.log('Fetching from URL:', url);
-            let response;
-            
             const headers: HeadersInit = {
                 'Content-Type': 'application/json',
             };
 
-            if (isValidCredentials) {
+            if (isValid(credentials)) {
                 const [macaroon, preimage] = credentials.split(':');
                 headers['Authorization'] = `L402 ${macaroon}:${preimage}`;
+            } else {
+                throw new Error('Invalid credentials');
             }
 
-            response = await fetch(url, {
+            const response = await fetch(url, {
                 method: 'POST',
                 headers,
                 body: JSON.stringify(graphQLParams),
             });
 
             console.log('Fetch response status:', response.status);
-            if (response.ok) {
-                setStatus({ message: `${response.status} OK`, ok: true });
-            } else if (response.status === 402) {
-                setStatus({ message: '402 Payment Required', ok: false });
-                const wwwAuthenticateHeader = response.headers.get('WWW-Authenticate');
-                if (wwwAuthenticateHeader) {
-                    const { macaroon, invoice } = parseWWWAuthenticateHeader(wwwAuthenticateHeader);
-                    let paymentHash = '';
-                    if (invoice) {
-                        const invoiceObj = new Invoice({ pr: invoice });
-                        paymentHash = invoiceObj?.paymentHash;
-                    }
-                    console.log('L402 authentication required:', { macaroon, invoice, paymentHash });
-                }
-                throw new Error('Payment required');
-            } else {
-                setStatus({ message: `${response.status} ${response.statusText}`, ok: false });
-                throw new Error(`HTTP error! status: ${response.status}`);
+            
+            let result;
+            try {
+                result = await response.json();
+            } catch (e) {
+                return { errors: [{ message: 'Failed to parse response as JSON' }] };
             }
 
-            const result = await response.json();
+            if (response.ok) {
+                setStatus({ message: `${response.status} OK`, ok: true });
+            } else {
+                setStatus({ message: `${response.status} ${response.statusText}`, ok: false });
+            }
+
+            // this is doing nothing, we should either connect to hub / bitcoin-connect
+            // if (response.status === 402) {
+            //     const wwwAuthenticateHeader = response.headers.get('WWW-Authenticate');
+            //     if (wwwAuthenticateHeader) {
+            //         const { macaroon, invoice } = parseWWWAuthenticateHeader(wwwAuthenticateHeader);
+            //         let paymentHash = '';
+            //         if (invoice) {
+            //             const invoiceObj = new Invoice({ pr: invoice });
+            //             paymentHash = invoiceObj?.paymentHash;
+            //         }
+            //         console.log('L402 authentication required:', { macaroon, invoice, paymentHash });
+            //     }
+            // }
+
             console.log('Fetcher received result:', result);
             
             if (result.data && result.data.__schema) {
                 setSchema(result.data.__schema);
-                generateQueriesWithChatGPT(result.data.__schema);
-            }
-
-            if (result.errors) {
-                console.error('GraphQL errors in response:', result.errors);
+                debouncedGenerateQueries(result.data.__schema);
             }
 
             return result;
         } catch (error) {
             console.error('Fetcher error:', error);
-            throw error;
+            return {
+                errors: [{ 
+                    message: error instanceof Error ? error.message : 'An unknown error occurred'
+                }]
+            };
         }
-    }, [url, credentials, isValidCredentials, generateQueriesWithChatGPT]);
-
-    const handleQuerySelect = (index: number) => {
-        setSelectedQueryIndex(index);
-    };
+    }, [url, credentials, debouncedGenerateQueries]);
 
     return (
         <div className="graphiql-container" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -206,30 +220,60 @@ const GraphQLExplorer: React.FC = () => {
                     Pay with Hub
                 </button>
             </div>
+            <div style={{ padding: '8px 16px', borderBottom: '1px solid #e0e0e0', display: 'flex', alignItems: 'center' }}>
+                <div style={{ flex: 1, marginRight: '16px' }}>
+                    <label htmlFor="custom-query" style={{ display: 'block', marginBottom: '4px' }}>Custom Query:</label>
+                    <textarea
+                        id="custom-query"
+                        value={customQuery}
+                        onChange={(e) => setCustomQuery(e.target.value)}
+                        style={{ width: '100%', height: '60px', resize: 'vertical' }}
+                        placeholder="Enter your custom query here..."
+                    />
+                </div>
+                <button
+                    onClick={() => schema && debouncedGenerateQueries(schema)}
+                    style={{
+                        backgroundColor: '#4CAF50',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '4px',
+                        padding: '8px 16px',
+                        fontSize: '14px',
+                        cursor: 'pointer',
+                        height: '40px',
+                    }}
+                >
+                    Generate Queries
+                </button>
+            </div>
+
             <div style={{ padding: '8px 16px', borderBottom: '1px solid #e0e0e0' }}>
-                <h3>Example Queries:</h3>
-                {generatedQueries.map((query, index) => (
+                <h3>Generated Queries:</h3>
+                {generatedQueries.map((q, index) => (
                     <button
                         key={index}
-                        onClick={() => handleQuerySelect(index)}
+                        onClick={() => handleQuerySelection(q.query)}
                         style={{
                             margin: '0 8px 8px 0',
                             padding: '4px 8px',
-                            backgroundColor: selectedQueryIndex === index ? '#4CAF50' : '#f0f0f0',
-                            color: selectedQueryIndex === index ? 'white' : 'black',
+                            backgroundColor: selectedQuery === q.query ? '#4CAF50' : '#f0f0f0',
+                            color: selectedQuery === q.query ? 'white' : 'black',
                             border: 'none',
                             borderRadius: '4px',
                             cursor: 'pointer',
                         }}
                     >
-                        {query.title}
+                        {q.title}
                     </button>
                 ))}
             </div>
+
             <div style={{ flex: 1, overflow: 'auto' }}>
                 <GraphiQL
                     fetcher={fetcher}
-                    query={selectedQueryIndex !== null ? generatedQueries[selectedQueryIndex]?.query : undefined}
+                    query={selectedQuery}
+                    onEditQuery={setSelectedQuery}
                 />
             </div>
         </div>

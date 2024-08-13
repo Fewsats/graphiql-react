@@ -19,6 +19,7 @@
     "graphql": "^16.9.0",
     "graphql-http": "^1.22.0",
     "http-proxy-middleware": "^3.0.0",
+    "lodash": "^4.17.21",
     "openai": "^4.55.4",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
@@ -54,5 +55,8 @@
       "last 1 firefox version",
       "last 1 safari version"
     ]
+  },
+  "devDependencies": {
+    "@types/lodash": "^4.17.7"
   }
 }
