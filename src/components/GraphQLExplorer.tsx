@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { GraphiQL } from 'graphiql';
 import type { Fetcher } from '@graphiql/toolkit';
 import 'graphiql/graphiql.min.css';
@@ -29,7 +29,8 @@ const GraphQLExplorer: React.FC = () => {
     const [schema, setSchema] = useState<any>(null);
     const [generatedQueries, setGeneratedQueries] = useState<Query[]>([]);
     const [selectedQuery, setSelectedQuery] = useState<string>('');
-    const [customQuery, setCustomQuery] = useState<string>("Can you generate 2 sample queries?");
+    const [customQuery, setCustomQuery] = useState<string>("Can you generate 3 sample queries?");
+    const [isInitialLoad, setIsInitialLoad] = useState(true);
 
     useEffect(() => {
         if (typeof window !== 'undefined') {
@@ -76,10 +77,9 @@ const GraphQLExplorer: React.FC = () => {
 
             const data = await response.json();
             console.log("Generated queries:", data.response);
-            const queries = data.response.queries;
+            const queries = data.queries;
             setGeneratedQueries(queries);
             
-            // Set the first query as the selected query
             if (queries.length > 0) {
                 setSelectedQuery(queries[0].query);
             }
@@ -88,14 +88,10 @@ const GraphQLExplorer: React.FC = () => {
         }
     }, [customQuery]);
 
-    const debouncedGenerateQueries = useMemo(
-        () => debounce(generateQueriesWithAPI, 500),
+    const debouncedGenerateQueries = useCallback(
+        debounce((schema: any) => generateQueriesWithAPI(schema), 500),
         [generateQueriesWithAPI]
     );
-
-    const handleQuerySelection = (query: string) => {
-        setSelectedQuery(query);
-    };
 
     const fetcher = useCallback(async (graphQLParams: any) => {
         if (!url) {
@@ -137,25 +133,12 @@ const GraphQLExplorer: React.FC = () => {
                 setStatus({ message: `${response.status} ${response.statusText}`, ok: false });
             }
 
-            // this is doing nothing, we should either connect to hub / bitcoin-connect
-            // if (response.status === 402) {
-            //     const wwwAuthenticateHeader = response.headers.get('WWW-Authenticate');
-            //     if (wwwAuthenticateHeader) {
-            //         const { macaroon, invoice } = parseWWWAuthenticateHeader(wwwAuthenticateHeader);
-            //         let paymentHash = '';
-            //         if (invoice) {
-            //             const invoiceObj = new Invoice({ pr: invoice });
-            //             paymentHash = invoiceObj?.paymentHash;
-            //         }
-            //         console.log('L402 authentication required:', { macaroon, invoice, paymentHash });
-            //     }
-            // }
-
-            console.log('Fetcher received result:', result);
-            
             if (result.data && result.data.__schema) {
                 setSchema(result.data.__schema);
-                debouncedGenerateQueries(result.data.__schema);
+                if (isInitialLoad) {
+                    debouncedGenerateQueries(result.data.__schema);
+                    setIsInitialLoad(false);
+                }
             }
 
             return result;
@@ -167,7 +150,17 @@ const GraphQLExplorer: React.FC = () => {
                 }]
             };
         }
-    }, [url, credentials, debouncedGenerateQueries]);
+    }, [url, credentials]);
+
+    const handleGenerateQueries = () => {
+        if (schema) {
+            debouncedGenerateQueries(schema);
+        }
+    };
+
+    const handleQuerySelection = (query: string) => {
+        setSelectedQuery(query);
+    };
 
     return (
         <div className="graphiql-container" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -232,7 +225,7 @@ const GraphQLExplorer: React.FC = () => {
                     />
                 </div>
                 <button
-                    onClick={() => schema && debouncedGenerateQueries(schema)}
+                    onClick={handleGenerateQueries}
                     style={{
                         backgroundColor: '#4CAF50',
                         color: 'white',

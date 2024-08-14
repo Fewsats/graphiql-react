@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Union
 from openai import OpenAI
 import os
@@ -23,31 +23,27 @@ class GraphQLSchema(BaseModel):
     schema: dict
 
 class GraphQLQuery(BaseModel):
-    title: str
-    query: str
-
+    reason: str = Field(..., description="Think step by step, describe the query you are about to generate")
+    title: str = Field(..., description="The title or name of the GraphQL query")
+    query: str = Field(..., description="The actual GraphQL query string")
+    
 class GraphQLQueries(BaseModel):
-    queries: List[GraphQLQuery]
-
-class GeneralResponse(BaseModel):
-    response: GraphQLQueries
+    queries: List[GraphQLQuery] = Field(..., description="A list of GraphQL queries")
 
 class GenerateQueriesRequest(BaseModel):
-    schema: dict
-    question: str
+    schema: dict = Field(..., description="The GraphQL schema to use for query generation")
+    question: str = Field(..., description="The question or prompt for generating queries")
 
-@app.post("/generate_queries", response_model=GeneralResponse)
+@app.post("/generate_queries", response_model=GraphQLQueries)
 async def generate_queries(request: GenerateQueriesRequest):
-    prompt = f"""Given the following GraphQL schema, answer the question:
-
-    Schema: {request.schema}
-
-    Question: {request.question}"""
+    prompt = f"""Question: {request.question}
+    
+    GraphQL Schema: {request.schema}"""
 
     system_prompt = """
-    You are a helpful assistant. Use the schema to answer the question appropriately.   
-    Whenever you generate example queries, make sure they are ready to run but providing sensible default values.
-    Format the queries nicely, with indentation and line breaks.
+    You are a helpful assistant. Use the GraphQL schema to answer the question appropriately.   
+    Whenever you generate example queries, provide sensible default values so they are ready to use.
+    Format the queries with indentation and line breaks.
     The generated queries should be named, like `query GetUserByID { ... }`
     """
 
@@ -60,7 +56,7 @@ async def generate_queries(request: GenerateQueriesRequest):
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": prompt}
             ],
-            response_format=GeneralResponse,
+            response_format=GraphQLQueries,
         )
         message = completion.choices[0].message
         if message.parsed:
