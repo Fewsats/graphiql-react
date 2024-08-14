@@ -8,6 +8,8 @@ import parseWWWAuthenticateHeader from "../utils/parseWWWAuthenticateHeader";
 import { z } from 'zod';
 import { debounce } from 'lodash';
 import { ClipLoader } from 'react-spinners';
+const { getIntrospectionQuery } = require('graphql')
+
 
 const GraphQLQuery = z.object({
     title: z.string(),
@@ -113,10 +115,7 @@ const GraphQLExplorer: React.FC = () => {
             if (isValid(credentials)) {
                 const [macaroon, preimage] = credentials.split(':');
                 headers['Authorization'] = `L402 ${macaroon}:${preimage}`;
-            } else {
-                throw new Error('Invalid credentials');
             }
-
             const response = await fetch(url, {
                 method: 'POST',
                 headers,
@@ -125,6 +124,14 @@ const GraphQLExplorer: React.FC = () => {
 
             console.log('Fetch response status:', response.status);
             
+            console.log("Response:", response);
+            if (response.ok) {
+                setStatus({ message: `${response.status} OK`, ok: true });
+            } else {
+                const text = await response.text();
+                setStatus({ message: `${response.status} ${text}`, ok: false });
+            }
+
             let result;
             try {
                 result = await response.json();
@@ -132,23 +139,11 @@ const GraphQLExplorer: React.FC = () => {
                 return { errors: [{ message: 'Failed to parse response as JSON' }] };
             }
 
-            if (response.ok) {
-                setStatus({ message: `${response.status} OK`, ok: true });
-            } else {
-                setStatus({ message: `${response.status} ${response.statusText}`, ok: false });
-            }
-
-            if (result.data && result.data.__schema) {
-                setSchema(result.data.__schema);
-                if (isInitialLoad) {
-                    debouncedGenerateQueries(result.data.__schema);
-                    setIsInitialLoad(false);
-                }
-            }
 
             return result;
         } catch (error) {
             console.error('Fetcher error:', error);
+            setStatus({ message: `${error}`, ok: false });
             return {
                 errors: [{ 
                     message: error instanceof Error ? error.message : 'An unknown error occurred'
@@ -156,6 +151,29 @@ const GraphQLExplorer: React.FC = () => {
             };
         }
     }, [url, credentials]);
+
+    const refetchSchema = useCallback(() => {
+        fetcher({ query: getIntrospectionQuery() })
+            .then((result) => {
+                if (result.data && result.data.__schema) {
+                    setSchema(result.data.__schema);
+                    if (isInitialLoad) {
+                        debouncedGenerateQueries(result.data.__schema);
+                        setIsInitialLoad(false);
+                    }
+                }
+                // The fetcher already sets the status, so we don't need to set it here
+            })
+            .catch((error) => {
+                console.error('Error fetching schema:', error);
+                // The fetcher should handle setting the status for errors as well
+            });
+    }, [fetcher, debouncedGenerateQueries, isInitialLoad]);
+
+    useEffect(() => {
+        console.log("Refetching schema");
+        refetchSchema();
+    }, [url, credentials, refetchSchema]);
 
     const handleGenerateQueries = () => {
         if (schema) {
@@ -184,7 +202,7 @@ const GraphQLExplorer: React.FC = () => {
                     style={{ width: '400px', height: '32px', marginRight: '16px' }}
                 />
                 {status && (
-                    <span style={{
+                    <span id="endpoint-status" style={{
                         fontSize: '14px',
                         fontWeight: 'bold',
                         color: status.ok ? 'green' : 'red',
