@@ -7,6 +7,7 @@ import { Invoice } from '@getalby/lightning-tools';
 import parseWWWAuthenticateHeader from "../utils/parseWWWAuthenticateHeader";
 import { z } from 'zod';
 import { debounce } from 'lodash';
+import { ClipLoader } from 'react-spinners';
 
 const GraphQLQuery = z.object({
     title: z.string(),
@@ -31,6 +32,7 @@ const GraphQLExplorer: React.FC = () => {
     const [selectedQuery, setSelectedQuery] = useState<string>('');
     const [customQuery, setCustomQuery] = useState<string>("Can you generate 3 sample queries?");
     const [isInitialLoad, setIsInitialLoad] = useState(true);
+    const [isGenerating, setIsGenerating] = useState(false);
 
     useEffect(() => {
         if (typeof window !== 'undefined') {
@@ -56,13 +58,14 @@ const GraphQLExplorer: React.FC = () => {
 
 
     const generateQueriesWithAPI = useCallback(async (schema: any) => {
+        setIsGenerating(true);
         try {
             const requestBody = { 
                 schema: schema,
                 question: customQuery
             };
 
-            const response = await fetch('http://localhost:8000/generate_queries', {
+            const response = await fetch('https://graph-ql-query-generator.replit.app/generate_queries', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -85,6 +88,8 @@ const GraphQLExplorer: React.FC = () => {
             }
         } catch (error) {
             console.error("Error generating queries:", error);
+        } finally {
+            setIsGenerating(false);
         }
     }, [customQuery]);
 
@@ -220,14 +225,23 @@ const GraphQLExplorer: React.FC = () => {
                         id="custom-query"
                         value={customQuery}
                         onChange={(e) => setCustomQuery(e.target.value)}
-                        style={{ width: '100%', height: '60px', resize: 'vertical' }}
+                        style={{
+                            width: '100%',
+                            height: '60px',
+                            resize: 'vertical',
+                            color: 'hsla(var(--color-neutral), 1)',
+                            fontFamily: 'var(--font-family)',
+                            fontSize: 'var(--font-size-caption)',
+                            padding: '8px',
+                        }}
                         placeholder="Enter your custom query here..."
                     />
                 </div>
                 <button
                     onClick={handleGenerateQueries}
+                    disabled={isGenerating}
                     style={{
-                        backgroundColor: '#4CAF50',
+                        backgroundColor: 'rgb(138, 43, 226)',
                         color: 'white',
                         border: 'none',
                         borderRadius: '4px',
@@ -235,9 +249,16 @@ const GraphQLExplorer: React.FC = () => {
                         fontSize: '14px',
                         cursor: 'pointer',
                         height: '40px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
                     }}
                 >
-                    Generate Queries
+                    {isGenerating ? (
+                        <ClipLoader color="#ffffff" size={20} />
+                    ) : (
+                        'Generate Queries'
+                    )}
                 </button>
             </div>
 
@@ -250,7 +271,7 @@ const GraphQLExplorer: React.FC = () => {
                         style={{
                             margin: '0 8px 8px 0',
                             padding: '4px 8px',
-                            backgroundColor: selectedQuery === q.query ? '#4CAF50' : '#f0f0f0',
+                            backgroundColor: selectedQuery === q.query ? 'rgb(138, 43, 226)' : '#f0f0f0',
                             color: selectedQuery === q.query ? 'white' : 'black',
                             border: 'none',
                             borderRadius: '4px',
