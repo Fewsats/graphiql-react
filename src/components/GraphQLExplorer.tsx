@@ -26,13 +26,13 @@ type Query = {
 };
 
 const GraphQLExplorer: React.FC = () => {
-    const [url, setUrl] = useState('https://flask-l-402-data-pol-avec.replit.app/graphql');
-    const [credentials, setCredentials] = useState('AgE0aHR0cHM6Ly82NjYzMWQ0Ny1kNjk5LTQyYjUtOGM4ZS03YTI4N2I4Zjg0OWQucmVwbC5jbwJCAADCisWw7zgzOWrhqHoIgkeakQXziNXlnEEjRos5xEadodH0nUNEJ30DYUdlWJS6qa7o5q3_SrR5UcdxG9OOSXqgAAAGIGqpQR5H6DFbIYuMmqk1vwboLbBUgs7A1Ef3v2cJuPnp:532d81688f2a4d236a992e72b4cd53daf71fd6973a4dc7c4af0a6126a5de951e');
+    const [url, setUrl] = useState('https://api.fewsats.com/v0/gateway/access/51be29af-c243-4807-9c96-a697a10e3dad');
+    const [credentials, setCredentials] = useState('AgELZmV3c2F0cy5jb20CQgAAm4Ge0/bzgBY78yjt+aBp5sI/zugNXGnQ/84wEelHXcQeIpsV61ipIh8tBMJMWwbKYD1TIcoU0W+wzCMZNJwumQACMGV4dGVybmFsX2lkPTUxYmUyOWFmLWMyNDMtNDgwNy05Yzk2LWE2OTdhMTBlM2RhZAACH2V4cGlyZXNfYXQ9MjAyNC0wOS0yMlQxNjoyNTozMVoAAAYgjnnPh1MuAEpYT84B799fistV7ir0M6Uo/FQgqAH1nDw=:2a578822936e1ee6438ab4654a88d4347604d6cee6c390221bce503fab0f708b');
     const [status, setStatus] = useState<{ message: string; ok: boolean } | null>(null);
     const [schema, setSchema] = useState<any>(null);
     const [generatedQueries, setGeneratedQueries] = useState<Query[]>([]);
     const [selectedQuery, setSelectedQuery] = useState<string>('');
-    const [customQuery, setCustomQuery] = useState<string>("Can you generate 3 sample queries?");
+    const [customQuery, setCustomQuery] = useState<string>("Can you show me how to retrieve all communities?");
     const [isInitialLoad, setIsInitialLoad] = useState(true);
     const [isGenerating, setIsGenerating] = useState(false);
 
