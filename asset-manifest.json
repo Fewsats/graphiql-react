@@ -1,7 +1,7 @@
 {
   "files": {
     "main.css": "/graphiql-react/static/css/main.1c5a9e5c.css",
-    "main.js": "/graphiql-react/static/js/main.630fa696.js",
+    "main.js": "/graphiql-react/static/js/main.8b6c275e.js",
     "static/js/599.102677c0.chunk.js": "/graphiql-react/static/js/599.102677c0.chunk.js",
     "static/js/382.53403f99.chunk.js": "/graphiql-react/static/js/382.53403f99.chunk.js",
     "static/js/305.e4b6b4a3.chunk.js": "/graphiql-react/static/js/305.e4b6b4a3.chunk.js",
@@ -30,7 +30,7 @@
     "static/js/453.9b5a3648.chunk.js": "/graphiql-react/static/js/453.9b5a3648.chunk.js",
     "index.html": "/graphiql-react/index.html",
     "main.1c5a9e5c.css.map": "/graphiql-react/static/css/main.1c5a9e5c.css.map",
-    "main.630fa696.js.map": "/graphiql-react/static/js/main.630fa696.js.map",
+    "main.8b6c275e.js.map": "/graphiql-react/static/js/main.8b6c275e.js.map",
     "599.102677c0.chunk.js.map": "/graphiql-react/static/js/599.102677c0.chunk.js.map",
     "382.53403f99.chunk.js.map": "/graphiql-react/static/js/382.53403f99.chunk.js.map",
     "305.e4b6b4a3.chunk.js.map": "/graphiql-react/static/js/305.e4b6b4a3.chunk.js.map",
@@ -60,6 +60,6 @@
   },
   "entrypoints": [
     "static/css/main.1c5a9e5c.css",
-    "static/js/main.630fa696.js"
+    "static/js/main.8b6c275e.js"
   ]
 }
